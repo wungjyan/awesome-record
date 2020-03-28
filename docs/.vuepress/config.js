@@ -8,6 +8,10 @@ module.exports = {
             {
                 text:'首页',
                 link:'/'
+            },
+            {
+                text: '学习',
+                link: '/learn/webpack'
             }
         ],
         sidebar: utils.inferSiderbars(),
