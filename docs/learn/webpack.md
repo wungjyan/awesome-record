@@ -41,7 +41,7 @@ npx webpack --config my.config.js // 根据配置文件 my.config.js 来打包
 此时执行 `npm run bundle` 即可执行打包操作，这在命令行配置很多的情况下，极大简化了操作。一个细节就是配置中无需加入 `npx`，因为 `scripts` 中的命令会自动从当前项目中查找相关命令。
 ## 模式（mode）
 webpack 提供 mode 配置选项，告知 webpack 使用相应模式的内置优化。如果不手动配置，默认是 `production` 模式，它会压缩打包后的代码。开发环境中可手动配置为 `development` 模式：
-```bash
+```js
 module.exports = {
   mode: 'development'
 };
@@ -62,7 +62,7 @@ webpack 默认只识别以 js 结尾的文件，当遇到其他格式的文件�
 
 ### 处理样式的loader
 处理css样式一般需要同时使用两个loader，分别是 `css-loader` 和 `style-loader`，使用如下：
-```json
+```js
 module:{
     rules:[
         {
@@ -75,7 +75,7 @@ module:{
 use 数组中的各个 loader，是从右向左依次应用的。`css-loader` 作用是解析 .css 结尾的文件，而 `style-loader` 作用是将解析好的 css 样式挂载到页面上，所以顺序不能乱。
 
 如果需要使用 sass 来编写样式，那就需要使用到 `sass-loader`，其配置如下：
-```json
+```js
 module:{
     rules:[
         {
@@ -90,3 +90,26 @@ module:{
 npm install sass-loader node-sass --save-dev
 ```
 
+### 更多的loader
+更多的 loader 可以参考 [中文官网loaders](https://www.webpackjs.com/loaders/)，里面有很多详细的配置。
+
+## 插件（Plugin）
+插件用以扩展 webpack 的功能，在 webpack 运行的过程中，插件会监听一些事件，在合适的时机通过 webpack 提供的 api 改变输出结果。
+
+插件在 plugins 中单独配置，类型为数组，每一项是一个插件的实例，参数通过构造函数传入。
+
+演示 `html-webpack-plugin` 和 `clean-webpack-plugin` 两个常用插件的使用：
+```js
+const HtmlWebpackPlugin = require('html-webpack-plugin')
+const {CleanWebpackPlugin} = require('clean-webpack-plugin')
+module.exports = {
+    // ... 
+    plugins:[
+        new HtmlWebpackPlugin({
+           template:'./src/index.html'
+        }),
+        new CleanWebpackPlugin()
+    ]
+}
+```
+更多插件可参考 [中文官网 Plugins](https://www.webpackjs.com/plugins/)
