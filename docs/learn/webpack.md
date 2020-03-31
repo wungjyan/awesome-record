@@ -50,6 +50,70 @@ module.exports = {
 ```bash
 webpack --mode=development
 ```
+
+## 入口（entry）和出口（output）
+entry 单个入口，可以是一个字符串路径，也可以是一个包含多个字符串路径的数组。
+
+**单一字符串路径：**
+```js
+{
+  entry: './src/index.js'  
+}
+```
+等同于：
+```js
+{
+    entry: {
+        main: './src/index.js'
+    }
+}
+```
+此时如果 output.filename 没有指定输出文件名，那么默认就为 `main.js`，如果指定了输出名。以 output.filename 为准。
+
+**数组路径：**
+```js
+{
+    entry:['./src/index.js', './src/demo.js']
+}
+```
+这种写法表示将多个文件打包到一个文件中，最终打包出的出口文件只有一个。
+
+**对象语法：**
+```js
+{
+    entry: {
+        app: './src/app.js',
+        vendors: './src/vendors.js'
+    }
+}
+```
+此种写法会打包出两个文件，所以在 output.filename 设置时不能设置为一个单一的出口文件，可以不设置，此时打包出的文件名就是 entry 中的 key 名。或者使用占位符写法：
+```js
+{
+    output:{
+        filename: '[name].js'
+    }
+}
+```
+此时打包出的就是 `app.js` 和 `vendors.js`
+
+
+## SourceMap
+什么是 SourceMap ?
+
+sourceMap 就是一个文件，里面储存着位置信息。
+
+打包后的代码与实际开发中的代码不一样，SourceMap 文件保存了打包前后代码的位置映射关系，这样在调试的时候能够找到源代码中出错的位置。
+
+在 webpack 中启动 SourceMap，需要在 devtool 中设置：
+```js
+{
+    devtool: 'source-map'
+}
+```
+更多 devtool 的可配置值参考 [webpack 中文官网 devtool](https://www.webpackjs.com/configuration/devtool/)
+
+
 ## Loader
 webpack 默认只识别以 js 结尾的文件，当遇到其他格式的文件后，webpack 不知道该如何去处理，此时，就需要用到 Loader 将资源转化，使其可以被加载。
 
