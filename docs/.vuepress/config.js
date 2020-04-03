@@ -15,6 +15,8 @@ module.exports = {
             }
         ],
         sidebar: utils.inferSiderbars(),
+        repo:'wungjyan/awesome-record',
+        editLinkText: '在 GitHub 上编辑此页',
         lastUpdated:'上次更新'
     }
 }

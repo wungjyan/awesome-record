@@ -177,3 +177,148 @@ module.exports = {
 }
 ```
 更多插件可参考 [中文官网 Plugins](https://www.webpackjs.com/plugins/)
+
+## devServer
+开发环境搭建服务器环境，可以配置 devServer。如下：
+```js
+{
+    devServer:{
+        contentBase: path.join(__dirname,'dist') // 在打包目录中启动服务
+        compress: true, // 启用 gzip 服务
+        open: true, // 自动打开浏览器
+        port: 9000 // 端口
+    }
+}
+```
+此时在 scripts 命令中配置：
+```js
+scripts:{
+    "start": "webpack-dev-server"
+}
+```
+当运行 `npm run start` 时，页面会被自动打开，同时当修改代码保存时，会自动刷新浏览器以达到实时预览效果。
+
+更多配置参考 [devServer](https://www.webpackjs.com/configuration/dev-server/)
+
+## 热替换
+什么是热替换？
+
+上面说到当启用 devServer 配置后，改变源代码时浏览器会自动刷新以实现实时预览。
+但有时我们并不想整个页面都被刷新，比如页面中的有些模块可能是后来才加载出来的，在改变源代码时我们不想这些模块因为页面刷新而消失，同时改变的效果也能实时预览。此时就需要热替换的功能，在不刷新页面的情况下做到实时预览。
+
+在 `devServer` 中配置热替换功能：
+```js
+{
+    devServer:{
+        hot: true, // 开启热替换
+        hotOnly: true // 非必须开启，开启此项后表示即使热替换构建失败，也不要刷新页面作为回退
+    }
+}
+```
+然后在插件配置中追加 `webpack.HotModuleReplacementPlugin`，如下：
+```js
+ plugins:[
+        new HtmlWebpackPlugin({
+           template:'./src/index.html'
+        }),
+        new CleanWebpackPlugin(),
+
+        new webpack.HotModuleReplacementPlugin()  // 添加此插件
+    ]
+```
+这样热替换功能就开启了。
+
+## 配置 Babel
+配置 Babel 以转义 es6 语法，需要安装以下三个插件：
+```bash
+npm install --save-dev babel-loader @babel/core @babel/preset-env
+```
+然后配置如下：
+```js
+{
+    test:/\.js$/,
+    exclude:/node_modules/,
+    loader:'babel-loader',
+    options:{
+        presets:['@babel/preset-env']
+    }
+}
+```
+此时就可以对 es6 语法转义，但是仍然有一些语法不会被转义，比如 Promise 变量等，这些在低版本浏览器中是不会被支持的，所以此时需要一个更彻底的转义支持，这就要用到 polyfill 了。
+
+安装 polyfill 插件：
+```bash
+npm install --save @babel/polyfill
+```
+然后在主入口文件中引入即可：
+```js
+import '@babel/polyfill'
+```
+现在又有一个问题，引入 polyfill 后，打包时也会将这部分代码一并打包，这就导致生成的文件很大。如果需要转义的语法并不多，那么全引入 polyfill 反而不划算，此时需要按需引入，方法是在 options 中加一个 useBuiltIns 的配置：
+```js
+{
+    test:/\.js$/,
+    exclude:/node_modules/,
+    loader:'babel-loader',
+    options:{
+        presets:[['@babel/preset-env',{
+            useBuiltIns: 'usage'
+        }]]
+    }
+}
+```
+现在再去打包，可能就会发现打包后的文件体积有所改善，这取决于你的实际代码应用了多少新特性。
+
+除了 `useBuiltIns` 这个配置，我们还可以加一个 `targets` 的配置项，如：
+```js
+options:{
+    presets:[['@babel/preset-env',{
+        targets:{
+            chrome:"67"
+        },
+        useBuiltIns: 'usage'
+    }]]
+}
+```
+这个配置的意思是，打包后的文件是运行在 chrome 浏览器 67 版本上的，此时打包的时候，会自动判断哪些语法需要用更多的代码去转义，如果浏览器已经支持的语法，则不会转义。此时如果配置的浏览器版本很新，那么打包文件的体积也会相应减小不少，相反如果配置的浏览器版本很低，那么就需要进行更多的代码转义，增加打包文件的体积。
+
+### plugin-transform-runtime
+以上是 presets 相关的配置，这在写业务代码时是可以使用的，但是在编写一些插件或者库之类的项目时，就不太适用了，因为 `polyfill` 会将 Promise 等添加成全局变量，会污染全局空间。此时我们需要用另外一种方法来转义代码，首先安装两个插件：
+```bash
+npm install --save-dev @babel/plugin-transform-runtime @babel/runtime
+```
+然后修改 options 配置，去掉 `presets` 的配置，整个配置如下：
+```js
+{
+    test:/\.js$/,
+    exclude:/node_modules/,
+    loader:'babel-loader',
+    options:{
+        // presets:[['@babel/preset-env',{
+        //     targets:{
+        //         chrome:"67"
+        //     },
+        //     useBuiltIns: 'usage'
+        // }]]
+        
+        "plugins": [
+            [
+                "@babel/plugin-transform-runtime",
+                {
+                "corejs": 2,
+                "helpers": true,
+                "regenerator": true,
+                "useESModules": false
+                }
+            ]
+        ]
+    }
+}
+```
+对了还需要安装一个插件：
+```bash
+npm install --save @babel/runtime-corejs2
+```
+这个插件对应配置中的 `"corejs": 2`
+
+最后的最后，我们还要删除 polyfill 的引用，然后就可以正常打包了。
