@@ -1,4 +1,4 @@
-# webpack 4 记录
+# webpack 4
 这里是 webpack4 的一些学习记录
 ## 安装与配置
 推荐在每个项目内局部安装，这样各项目可以使用不同的版本。新建项目目录，然后执行：
@@ -28,9 +28,9 @@ module.exports = {
 ```
 有了配置文件后，此时直接运行 `npx webpack` 即可完成打包。
 
-如果需要自定义配置文件的名称（有时候会编写多份配置文件，它们的名称不能同时为 webpack.config.js），那么在打包时我们要指定使用哪一个配置文件，使用指令 `--config`，比如：
-```
-npx webpack --config my.config.js // 根据配置文件 my.config.js 来打包
+如果需要自定义配置文件的名称（有时候会编写多份配置文件，它们的名称不能同时为 webpack.config.js），那么在打包时我们要指定使用哪一个配置文件，使用指令 `--config`，比如要根据配置文件 my.config.js 来打包：
+```bash
+npx webpack --config my.config.js 
 ```
 可以使用 `scripts` 命令来简化命令操作，在 `package.json` 文件中的 `scripts` 选项中配置：
 ```json
@@ -261,23 +261,37 @@ import '@babel/polyfill'
     exclude:/node_modules/,
     loader:'babel-loader',
     options:{
-        presets:[['@babel/preset-env',{
-            useBuiltIns: 'usage'
-        }]]
+        presets:[
+            [
+                '@babel/preset-env',
+                {
+                    useBuiltIns: 'usage'
+                }
+            ]
+        ]
     }
 }
 ```
-现在再去打包，可能就会发现打包后的文件体积有所改善，这取决于你的实际代码应用了多少新特性。
+现在再去打包，可能就会发现打包后的文件体积有所改善，这取决于你的实际代码应用了多少新特性。需要注意的是此时打包时可能会提示这样一段话：
+> When setting `useBuiltIns: 'usage'`, polyfills are automatically imported when needed.
+  Please remove the `import '@babel/polyfill'` call or use `useBuiltIns: 'entry'` instead.
+
+意思是当你设置了 `useBuiltIns: 'usage'`，webpack 会自动帮你引入 polyfill，所以我们可以在业务代码中移除 `import '@babel/polyfill'`。
 
 除了 `useBuiltIns` 这个配置，我们还可以加一个 `targets` 的配置项，如：
 ```js
 options:{
-    presets:[['@babel/preset-env',{
-        targets:{
-            chrome:"67"
-        },
-        useBuiltIns: 'usage'
-    }]]
+    presets:[
+        [
+            '@babel/preset-env',
+            {
+                targets:{
+                    chrome:"67"
+                },
+                useBuiltIns: 'usage'
+            }
+        ]
+    ]
 }
 ```
 这个配置的意思是，打包后的文件是运行在 chrome 浏览器 67 版本上的，此时打包的时候，会自动判断哪些语法需要用更多的代码去转义，如果浏览器已经支持的语法，则不会转义。此时如果配置的浏览器版本很新，那么打包文件的体积也会相应减小不少，相反如果配置的浏览器版本很低，那么就需要进行更多的代码转义，增加打包文件的体积。
@@ -293,14 +307,7 @@ npm install --save-dev @babel/plugin-transform-runtime @babel/runtime
     test:/\.js$/,
     exclude:/node_modules/,
     loader:'babel-loader',
-    options:{
-        // presets:[['@babel/preset-env',{
-        //     targets:{
-        //         chrome:"67"
-        //     },
-        //     useBuiltIns: 'usage'
-        // }]]
-        
+    options:{ 
         "plugins": [
             [
                 "@babel/plugin-transform-runtime",
@@ -322,3 +329,326 @@ npm install --save @babel/runtime-corejs2
 这个插件对应配置中的 `"corejs": 2`
 
 最后的最后，我们还要删除 polyfill 的引用，然后就可以正常打包了。
+
+**小技巧：**`options` 配置可以单独写到 `.babelrc` 文件中，项目目录中新建 `.babelrc` 文件，然后可以配置options，比如：
+```json
+{
+    "presets": [
+        [
+            "@babel/preset-env",
+            {
+                "targets": {
+                    "chrome": "67"
+                },
+                "corejs": 2, // 根据提示配置的此项  npm install --save core-js@2
+                "useBuiltIns": "usage"
+            }
+        ]
+    ]
+}
+```
+
+## Tree Shaking
+tree shaking 是一个术语，通常用于描述移除 JavaScript 上下文中的未引用代码(dead-code)，它依赖于 ES2015 模块系统中的静态结构特性，例如 `import` 和 `export`，在 CommonJS 规范中不适用。
+
+举个例子，写一个 `math.js` 文件，它包含两个方法函数：
+
+`src/main.js`
+```js
+export const add = (a, b) => {
+    return a + b
+}
+
+export const minus = (a, b) => {
+    return a - b
+}
+```
+
+现在在 `src/index.js` 中引用 `add` 方法：
+```js
+import { add } from './math'
+
+add(1, 2)
+```
+此时执行打包，然后在打包文件中这样一段：
+```js
+/***/ "./src/math.js":
+/*!*********************!*\
+  !*** ./src/math.js ***!
+  \*********************/
+/*! exports provided: add, minus */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+eval("__webpack_require__.r(__webpack_exports__);\n/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, \"add\", function() { return add; });\n/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, \"minus\", function() { return minus; });\nconst add = (a, b) => {\n  return a + b;\n};\nconst minus = (a, b) => {\n  return a - b;\n};\n\n//# sourceURL=webpack:///./src/math.js?");
+
+/***/ })
+```
+可以发现，虽然没有引用 `minus` 方法，但它依旧被打包进来了，而 Tree Shaking 的作用就是删除这些 “未引用代码”，它会自动识别没有被 export 的部分，然后删除这块代码，如上例中的 `minus` 部分就会被删除。
+
+但实际中并没有这么简单，有时候导入的代码中并没有暴露 export，只在导入时执行一些特殊行为，比如 polyfill，它影响全局作用域，并且通常不提供 export。这时候我们就不能利用 Tree Shaking 去删除它的引用。所以首先我们要告诉 webpack，哪些是可以安全删除的，做法是在 package.json 中添加 `"sideEffects"` 属性：
+```json
+{
+  "name": "your-project",
+  "sideEffects": false
+}
+```
+设置为 false，表示完全可以删除未用到的 export 导出。它也可以接收一个数组值，数组方式支持相关文件的相对路径、绝对路径和 glob 模式，如下：
+```json
+{
+  "name": "your-project",
+  "sideEffects": [
+    "@babel/polyfill",
+    "*.css"
+  ]
+}
+```
+数组中的文件都不会受 tree shaking 影响，不会因为没有 export 而被删除。
+
+设置完 `"sideEffects"`还不行，我们需要去 webpack 的配置文件中添加一个 `optimization` 的配置：
+```js
+module.exports = {
+  mode: "development",
+  optimization: {
+    usedExports: true
+  }  
+
+}
+```
+这个配置要在 `mode="development"` 下手动添加，当 mode 为 `production` 时会自动开启。
+
+现在再去打包，结果可能不尽人意，会发现还是没有删除未引用的代码，因为在开发环境下，是不会删除这些代码的，只是开启 tree shaking 后，webpack 还是知道了哪些是用到的代码：
+```js
+/***/ "./src/math.js":
+/*!*********************!*\
+  !*** ./src/math.js ***!
+  \*********************/
+/*! exports provided: add, minus */
+/*! exports used: add */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+```
+webpack 标注了 `exports used: add`。生产环境下，应该会生效，之所以说是应该，是因为可能会有别的原因导致不生效，之后遇到再来补充。
+
+## 代码分割（上）
+代码分割是什么意思？
+
+当我们要引入一个很大的 js 文件时，它必然会耗时更久，所以为了让加载更快，我们可能会将这个文件拆成若干个小的 js 文件，然后用 `<script src='*'></script>` 并行加载，这就是代码分割的概念。可以看出代码分割并不是 webpack 中的概念，这里只是讲怎么利用 webpack 实现代码分割。
+
+什么时候需要代码分割？
+
+开发中，很多时候我们的项目中会引入第三方库，这些库代码几乎不会变动，但打包时还是会和业务代码打包到一起，导致打包文件体积会很大，而且浏览器每次要看到效果时都必须执行完整个打包后的 js 文件，这影响了性能也影响了效率。此时就需要代码分割，将代码拆分打包成多个文件，加载时会并行加载，且不变的代码会直接从缓存中读取，极大提升了页面性能。
+
+举例，我们在项目中引入 `lodash` 这个第三方库：
+
+**src/index.js**
+```js
+import _ from 'lodash'
+console.log(_.join(['a','b','c'],'~'))
+```
+此时执行打包，你会发现即使我们的业务代码仅有短短两行，但是打包出的 `main.js` 文件已经超出 1mb 了，部分信息如下：
+```bash
+Hash: b9da9a28a34017da8c05
+Version: webpack 4.42.1
+Time: 966ms
+Built at: 2020-04-09 10:15:38 AM
+     Asset       Size  Chunks             Chunk Names
+index.html  290 bytes          [emitted]  
+   main.js   1.38 MiB    main  [emitted]  main
+Entrypoint main = main.js
+```
+这时我们就需要使用代码分割功能，将 lodash 部分的代码单独打包。在 webpack 中实现代码分割最简单的方式就是配置多个入口，如下：
+```js
+{
+    entry:{
+        main: './src/index.js',
+        lodash: './src/lodash.js'
+    }
+}
+```
+现在来创建 `src/lodash.js` 这个文件：
+```js
+import _ from 'lodash'
+window._ = _
+```
+代码很简单，就是将 lodash 变量挂载到全局 window 变量上了，这样全局就能使用到它的方法了，同时我们需要将`index.js` 中的引入删除，如下：
+```js
+// ./src/index.js
+
+console.log(_.join(['a','b','c'],'~'))
+```
+
+此时打包，结果：
+```bash
+Hash: 628c31b4969ab8f69bb0
+Version: webpack 4.42.1
+Time: 960ms
+Built at: 2020-04-09 11:22:16 AM
+     Asset       Size  Chunks             Chunk Names
+index.html  323 bytes          [emitted]  
+ lodash.js   1.38 MiB  lodash  [emitted]  lodash
+   main.js   29.1 KiB    main  [emitted]  main
+Entrypoint main = main.js
+Entrypoint lodash = lodash.js
+```
+可以看到打包后，会将 `lodash` 库单独打包成 `lodash.js`文件，而 `main.js` 文件只包含业务代码，所以体积目前很小，在浏览器初始加载时会耗费一些时间，但是之后再加载时，由于 `lodash.js` 文件并未改变，所以会从缓存中读取，提升了页面性能。
+
+**注意：此时打开 index.html 文件后会报错 `_ is not defined`，这是因为入口文件的书写顺序，影响了最终加载顺序，如果业务代码先加载，那么 _ 还未挂载到全局变量上，所以我们要修改 entry 的书写顺序，先引入 lodas，如下：**
+```js
+{
+    entry: {
+        lodash: './src/lodash.js',
+        main: './src/index.js'
+    }
+}
+```
+
+## 代码分割（下）
+在 entry 中配置多入口文件，看似操作简单，但问题也很明显，不够灵活，当项目中需要引入很多很杂的第三方库时，不好拆分，还要考虑多个入口中包含了重复的模块。
+
+webpack 提供了拆分代码的配置项，先把代码还原一下，删除 `lodash.js` 文件，将 `index.js` 文件还原为：
+```js
+import _ from 'lodash'
+
+console.log(_.join(['a','b','c'],'~'))
+```
+同时删除 entry 中的 lodash 入口，添加 `optimization` 配置，如下：
+```js
+module.exports = {
+    // ...
+    entry: {
+        main: './src/index.js'
+    },
+    optimization: {
+        // 配置代码分割
+        splitChunks: {
+            chunks: 'all'
+        }
+    }
+
+}
+```
+此时打包，结果：
+```bash
+Hash: 41ec5a419f07db298838
+Version: webpack 4.42.1
+Time: 1052ms
+Built at: 2020-04-09 3:02:02 PM
+          Asset       Size        Chunks             Chunk Names
+     index.html  329 bytes                [emitted]  
+        main.js   32.3 KiB          main  [emitted]  main
+vendors~main.js   1.36 MiB  vendors~main  [emitted]  vendors~main
+Entrypoint main = vendors~main.js main.js
+```
+这样配置后，会将 `lodash` 库代码打包到 `vendors~main.js` 文件中，也实现了代码分离的效果。
+其实 `splitChunks` 这个配置有很多配置项，当你不写任何配置时，它的完整默认配置如下：
+```js
+splitChunks: {
+    chunks: 'async',
+    minSize: 30000,
+    minRemainingSize: 0,
+    maxSize: 0,
+    minChunks: 1,
+    maxAsyncRequests: 6,
+    maxInitialRequests: 4,
+    automaticNameDelimiter: '~',
+    cacheGroups: {
+    defaultVendors: {
+        test: /[\\/]node_modules[\\/]/,
+        priority: -10
+    },
+    default: {
+        minChunks: 2,
+        priority: -20,
+        reuseExistingChunk: true
+    }
+    }
+}
+```
+各项配置的含义参考官方文档 [SplitChunksPlugin](https://webpack.js.org/plugins/split-chunks-plugin/)
+
+前面例子中，`import _ from 'lodash'` 这样的引入方式属于同步引入方式，接下来尝试一下异步引入的方式。首先我们可以修改下 `optimization` 配置项，如下：
+```js
+optimization: {
+    // 配置为空时，采用默认配置项
+    // 配置项 chunks 默认值是 'async'，表示只分割异步代码，它的其他可选值是 'all'（所有） ， 'initial（同步）'
+    splitChunks: {
+        // chunks: 'all'
+    }
+}
+```
+然后修改 `index.js` 文件的内容：
+```js
+function getComponent(){
+    return import('lodash').then(({default:_})=>{
+        let element = document.createElement('div')
+        element.innerHTML = _.join(['a','b','c'],'~')
+        return element
+    })
+}
+
+getComponent().then(element=>{
+    document.body.appendChild(element)
+})
+```
+这是一种异步加载的方式，此时打包，结果：
+```bash
+Hash: 6fe77bfa610015985bd2
+Version: webpack 4.42.1
+Time: 1086ms
+Built at: 2020-04-10 11:16:23 AM
+     Asset       Size  Chunks             Chunk Names
+      0.js   1.36 MiB       0  [emitted]  
+index.html  290 bytes          [emitted]  
+   main.js   34.5 KiB    main  [emitted]  main
+Entrypoint main = main.js
+```
+可以看到 `lodash` 库代码被打包到 `0.js` 这个文件中了，如果想要自定义这个名字，可以加入魔法注释，修改 `index.js`：
+```
+function getComponent(){
+    return import(/* webpackChunkName: 'lodash'*/ 'lodash').then(({default:_})=>{
+        let element = document.createElement('div')
+        element.innerHTML = _.join(['a','b','c'],'~')
+        return element
+    })
+}
+
+getComponent().then(element=>{
+    document.body.appendChild(element)
+})
+```
+此时再打包：
+```bash
+Hash: 3cb0a825db61f34059f4
+Version: webpack 4.42.1
+Time: 661ms
+Built at: 2020-04-10 11:26:11 AM
+            Asset       Size          Chunks             Chunk Names
+       index.html  290 bytes                  [emitted]  
+          main.js   34.6 KiB            main  [emitted]  main
+vendors~lodash.js   1.36 MiB  vendors~lodash  [emitted]  vendors~lodash
+Entrypoint main = main.js
+```
+可以看到 `lodash` 库代码被打包到 `vendors~lodash.js` 文件中了。为什么名称前面会多一个 `vendors`？这是因为 `splitChunks`的默认配置里`cacheGroups`这个配置项影响了，如果不想要前缀，可以修改配置：
+```js
+splitChunks:{
+    cacheGroups:{
+        // 文档中是 defaultVendors，但是配置失效，所以改成 vendors
+        vendors:false,
+        default:false
+    }
+}
+```
+此时再打包：
+```bash
+Hash: 2199955797b36a6146a4
+Version: webpack 4.42.1
+Time: 644ms
+Built at: 2020-04-10 11:38:12 AM
+     Asset       Size  Chunks             Chunk Names
+index.html  290 bytes          [emitted]  
+ lodash.js   1.36 MiB  lodash  [emitted]  lodash
+   main.js   34.6 KiB    main  [emitted]  main
+Entrypoint main = main.js
+```
+如果这种异步引入的方式不生效，或者魔法注释不生效，可能是webpack版本问题，可以添加使用插件 [@babel/plugin-syntax-dynamic-import](https://www.babeljs.cn/docs/babel-plugin-syntax-dynamic-import)
+
