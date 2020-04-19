@@ -10,8 +10,12 @@ module.exports = {
                 link:'/'
             },
             {
-                text: '学习',
-                link: '/learn/webpack'
+                text: '算法',
+                link: '/algorithm/chapter1'
+            },
+            {
+                text: 'Blog',
+                link: '/blog/vue'
             }
         ],
         sidebar: utils.inferSiderbars(),

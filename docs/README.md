@@ -1,6 +1,6 @@
 ---
 home: true
 actionText: 开始上车 →
-actionLink: /learn/webpack/
+actionLink: /blog/vue/
 footer: MIT Licensed | Copyright © 2020-present Wungjyan
 ---

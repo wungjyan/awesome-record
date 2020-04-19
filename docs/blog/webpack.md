@@ -652,3 +652,80 @@ Entrypoint main = main.js
 ```
 如果这种异步引入的方式不生效，或者魔法注释不生效，可能是webpack版本问题，可以添加使用插件 [@babel/plugin-syntax-dynamic-import](https://www.babeljs.cn/docs/babel-plugin-syntax-dynamic-import)
 
+## 打包小思考
+前面说到 `splitChunks` 这个配置项中的 `chunks` 默认值是 `async`，也就是默认只分割异步代码。为什么默认要这样设置？其实可以理解为 webpack 希望你是以异步的方式去编写代码，同步代码分割虽然可以使得后续加载更快，但是首次加载的速度并没有得到很大的提升，要想首次加载页面时渲染更快，可以用一种按需加载的异步方式去编写你的代码，即初始化时不加载全部代码，在需要的时候再加载剩余代码。下面举个例子：
+
+新建文件 `./src/click.js`：
+```js
+function handleClick(){
+    let element = document.createElement('div')
+    element.innerHTML = 'helllo world'
+    document.body.appendChild(element)
+}
+
+export default handleClick
+```
+逻辑很简单，就是创建一个函数，当执行时在页面添加一个 div 标签。再修改 `./src/index.js` ：
+```js
+document.addEventListener('click',()=>{
+    import('./click.js').then(({default:func})=>{
+        func()
+    })
+})
+```
+这就是一个按需加载的例子，当初始化运行时，页面只加载 `index.js` 部分的代码，而 `click.js` 部分的代码只会在你点击页面时才加载，这样处理就会使得初始加载速度极大提升，特别是当业务代码量很大时。
+
+按需加载是把双刃剑。有时候按需加载部分的代码逻辑较复杂，所以页面反应可能会不及时，影响了用户体验。所以此时我们要考虑另一种可行性的方案：
+
+那就是，同样是按需加载，即在首次加载的时候只加载需要的部分，但是按需加载的部分不需要等用户去触发才加载，而是当浏览器空闲下来时就加载，这样等到用户去触发时，其实已经将这部分代码加载了，这样也就解决了反馈不及时的情况了。那么这种方案可实现吗？当然可以，不然说这么多屁话干嘛。
+
+实现上面这种方案的方法就是加魔法注释，以上面例子来说，我们修改 `index.js` 文件：
+```js
+document.addEventListener('click',()=>{
+    import(/* webpackPrefetch: true */ './click.js').then(({default:func})=>{
+        func()
+    })
+})
+```
+使用 `webpackPrefetch: true` 这个注释即可开启这种加载方式。此时打包运行，在浏览器控制台的 Network 中即可发现刷新页面时，所有文件瞬间都被加载了，看起来跟同步加载一样，其实是因为代码量太小，所以加载很快速导致察觉不到，`click.js` 部分是在浏览器加载完需要部分的代码后才加载的。此时点击页面时也会发现 `click.js` 部分又被加载了一次，但是时间明显缩短很多，这是因为之前已经被加载到缓存中了。
+
+## 分割 CSS 代码
+分割 css 代码使用到插件 `mini-css-extract-plugin`，安装插件：
+```bash
+npm install --save-dev mini-css-extract-plugin
+```
+
+然后在配置文件中配置使用：
+```js
+const MiniCssExtractPlugin = require('mini-css-extract-plugin')
+
+module.exports = {
+    plugins: [new MiniCssExtractPlugin()],
+    module: {
+        rules: [
+            {
+                test: /\.css$/,
+                use: [MiniCssExtractPlugin.loader,'css-loader']
+            }
+        ]
+    }
+}
+```
+创建 `style.css` 样式文件：
+```css
+body{
+    background: red;
+}
+```
+在 `index.js` 入口文件中引用：
+```js
+import './style.css'
+
+console.log('hello world')
+```
+打包后即可输出 `main.css` 外部样式文件。
+
+## shimming
+webpack 可以识别 ES 模块语法、CommonJS 或 AMD 规范编写的模块。但是一些第三方库可能会引用一些全局依赖（例如 `jQuery` 中的 `$`。这些库也可能创建一些需要被导出的全局变量。这些“不符合规范的模块”就是 shimming 发挥作用的地方。
+
+详细的 shimming 一些配置可以参考 [shimming](https://www.webpackjs.com/guides/shimming/)
