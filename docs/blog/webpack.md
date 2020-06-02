@@ -50,6 +50,9 @@ module.exports = {
 ```bash
 webpack --mode=development
 ```
+`mode` 的两种方式的区别：
+- `development`：会将 `process.env.NODE_ENV` 的值设为 `development`。同时启用 `NamedChunksPlugin` 和 `NamedModulesPlugin`。
+- `production`：会将 `process.env.NODE_ENV` 的值设为 `production`。同时启用 `FlagDependencyUsagePlugin`, `FlagIncludedChunksPlugin`, `ModuleConcatenationPlugin`, `NoEmitOnErrorsPlugin`, `OccurrenceOrderPlugin`, `SideEffectsFlagPlugin` 和 `UglifyJsPlugin`
 
 ## 入口（entry）和出口（output）
 entry 单个入口，可以是一个字符串路径，也可以是一个包含多个字符串路径的数组。
@@ -195,6 +198,8 @@ module.exports = {
 scripts:{
     "start": "webpack-dev-server"
 }
+
+// 需要先安装 npm install --save-dev webpack-dev-server
 ```
 当运行 `npm run start` 时，页面会被自动打开，同时当修改代码保存时，会自动刷新浏览器以达到实时预览效果。
 
@@ -729,3 +734,31 @@ console.log('hello world')
 webpack 可以识别 ES 模块语法、CommonJS 或 AMD 规范编写的模块。但是一些第三方库可能会引用一些全局依赖（例如 `jQuery` 中的 `$`。这些库也可能创建一些需要被导出的全局变量。这些“不符合规范的模块”就是 shimming 发挥作用的地方。
 
 详细的 shimming 一些配置可以参考 [shimming](https://www.webpackjs.com/guides/shimming/)
+
+## 环境变量
+有时候需要在 webpack 配置文件中针对开发和生产环境做一些差异化，这时候需要一些环境变量来辅助完成。
+
+在 webpack 命令行环境配置中，可以通过 `--env` 来设置自己需要的环境变量，这些设置的变量可以在配置文件中获取。然而，你必须对 webpack 配置进行一处修改。通常，`module.exports` 指向配置对象。要使用 `env` 变量，你必须将 `module.exports` 转换成一个函数：
+```js
+const config = {
+    entry: {
+        main: './src/index.js'
+    },
+    output:{
+        path:path.resolve(__dirname,'dist'),
+        filename:'[name].[hash].js'
+    }
+    // ...
+}
+
+module.exports = env => {
+    // 这里可以针对获取到的环境变量来做一些配置
+    console.log('获取环境变量：',env)
+    return config
+}
+```
+命令行中设置参数，如：
+```bash
+webpack --env.test=hello
+```
+这样设置后，配置文件中获取到的 `env` 为 `{ test: 'hello' }`。如果不对变量赋值，如 `--env.test` 这样，那么 test 的值就是 `true`。

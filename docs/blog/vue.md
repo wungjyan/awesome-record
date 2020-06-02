@@ -222,3 +222,111 @@ export default {
 </li>
 ```
 
+## 非 Prop 的属性
+一个非 prop 的属性是指传向一个组件，但是该组件内部没有使用 prop 定义的属性。那么该属性最终会添加到组件根元素上。
+
+这是一个子组件：
+```html
+<template>
+  <div>
+    <div>我是子组件</div>
+  </div>
+</template>
+```
+父组件：
+```html
+<template>
+  <div>
+    <child my-data="my data"/>
+  </div>
+</template>
+```
+传给子组件的 `my-data`，由于没有被 prop 定义，最终被添加到子组件根元素上，如下：
+```html
+<div my-data="my data">
+  <div>我是子组件</div>
+</div>
+```
+
+注意，如果子组件根元素上同样定义了一个 `my-data` 属性，那么外部传入的会替换内部已有的数据。
+
+### 合并 class 和 style
+很多时候我们在父组件中使用子组件时，会给子组件一个 class 或者 style，这本质上这也算属性传递，但是如果属性名是 `class` 或者 `style` 时，是不会替换子组件内部的 class 或者 style 的，而是合并。
+
+例如子组件：
+```html
+<template>
+  <div class="inner-class">
+    <div >我是子组件</div>
+  </div>
+</template>
+```
+父组件：
+```html
+<template>
+  <div>
+    <child class="external-class"/>
+  </div>
+</template>
+```
+最终解析为：
+```html
+<div class="inner-class external-class">
+  <div>我是子组件</div>
+</div>
+```
+
+**注意，经测试，class 合并时不会去重，即如果外部 class 与内部 class 名称重复时，最终解析出就有两个同名的 class。而 style 会去重。**
+
+### 禁用属性继承
+当属性没被 prop 定义时，同时你又不希望该属性被组件根元素继承，那么可以使用 `inheritAttrs` 这个选项来禁用继承。
+在子组件中设置：
+```js
+{
+  // 与 data 选项同级
+  inheritAttrs: false
+}
+```
+此时子组件就不会继承那些非 Prop 的属性了。但是 **class 和 style 不会受影响**。
+
+## 依赖注入 provide & inject
+provide 选项允许我们指定我们想要提供给后代组件的数据和方法，然后在子组件中使用 inject 选项接收祖先组件传过来的数据和方法。
+
+祖先组件
+```js
+export default {
+  // 向后代组件提供 msg 数据和 test 方法
+  provide () {
+    return {
+      msg: this.msg,
+      test: this.test
+    }
+  },
+  data () {
+    return {
+      msg: '我是父组件的数据'
+    }
+  },
+  methods: {
+    test () {
+      console.log('调用父组件的test方法')
+    }
+  }
+}
+```
+后代组件
+```js
+export default {
+  // 接收 msg 和 test
+  inject: ['msg', 'test'],
+  methods: {
+    log () {
+      console.log(this.msg)
+      this.test()
+    }
+  }
+}
+```
+这个后代组件无论层级多深，都能通过 inject 接收到父组件提供的数据。需要注意的是，provide 提供的 property 是非响应式的。
+
+
