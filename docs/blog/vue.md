@@ -96,6 +96,9 @@ var vm = new Vue({
 // 修改 b 对象的属性值
 vm.b.num = 5
 ```
+上面这种情况是监听对象本身，修改它的属性值，需要使用 `deep`。如果对象本身重新赋值，则不需要`deep`。另外直接监听对象里的属性，也不需要`deep`。
+
+注意：直接监听对象时，修改它的属性值，此时是无法拿到**旧值**的，因为对象内存地址是同一个。
 
 ### 监听执行多个方法
 使用 `watch` 监听时，可以执行多个方法，利用数组可以设置多项，如下例：
@@ -329,4 +332,163 @@ export default {
 ```
 这个后代组件无论层级多深，都能通过 inject 接收到父组件提供的数据。需要注意的是，provide 提供的 property 是非响应式的。
 
+## 自定义事件通信
+兄弟组件的通信方式，有三种：
+- 子传父，父再传子
+- 使用 vuex
+- 自定义事件
+
+自定义事件通信利用 `$on` 和 `$emit` 两个api，他们需要在一个公共的Vue实例上触发，这个实例称作“事件总线”，即常说的 `EventBus`。
+
+新建 Vue 实例，文件名为 `eventBus.js`
+```js
+import Vue from 'vue'
+export default new Vue()
+```
+
+Component1 组件里监听：
+```js
+import eventBus from './eventBus.js'
+// ...
+mounted(){
+  eventBus.$on('my-event',handler)
+}
+
+// handler 指一个函数的名字，这里使用函数名而不是直接写函数体，是为了便于解绑，即组件销毁时要解绑，节省内存
+
+beforeDestroy(){
+  eventBus.$off('my-event',handler)
+}
+```
+
+Component2 组件里触发：
+```js
+import eventBus from './eventBus.js'
+// ...
+methods:{
+  test(){
+    eventBus.$emit('my-event',someValue)
+  }
+}
+```
+
+## 父子组件生命周期执行顺序
+```js
+// f 代表父组件，c 代表子组件
+f-beforeCreate
+f-created
+f-beforeMount
+c-beforeCreate
+c-created
+c-beforeMount
+c-mounted
+f-mounted
+
+f-beforeUpdate
+c-beforeUpdate
+c-updated
+f-updated
+
+f-beforeDestroy
+c-beforeDestroy
+c-destroyed
+f-destroyed
+```
+
+## 自定义 v-model
+使用 `v-model` 指令可以在表单 `input`、`textarea` 和 `select` 元素上创建双向数据绑定。也可以给自定义组件加上 `v-model` 指令，它本质上是一种语法糖，当我们在组件上使用 `v-model` 时，会在组件内部自动解析为名为 `value` 的 prop，和名为 `input` 的事件，按照这个规定，就可以实现自定义组件的 `v-model` 数据绑定。
+
+例子：
+```vue
+// 父组件使用子组件，子组件使用 v-model
+<template>
+ <child v-model="val"/>
+</template>
+
+
+<script>
+// ...
+export default {
+  // ...
+  data(){
+    return {
+      val:''
+    }
+  }
+}
+</script>
+
+```
+```vue
+// 子组件内部使用名为 value 的 prop 接收，和触发名为 input 的事件
+<template>
+  <div>
+    <input type="text" :value="value" @input="$emit('input', $event.target.value)"/>
+  </div>
+</template>
+
+<script>
+export default {
+  props: ['value'] // 默认必须是 value
+}
+</script>
+```
+默认的`value` 和 `input` 可以修改，这时可以使用 `model` 选项来定义需要的 `prop` 和 `event`：
+```vue
+<template>
+  <div>
+    <input type="text" :value="text" @change="$emit('change',$event.target.value)">
+  </div>
+</template>
+
+<script>
+export default {
+  model: {
+    prop: 'text',
+    event: 'change'
+  },
+  props: ['text']
+}
+</script>
+```
+
+## $nextTick
+Vue 是异步渲染，在 data 改变之后，DOM 不会立刻渲染，`$nextTick` 会在 DOM 渲染之后被触发，以获取最新的 DOM 节点。
+
+一个例子：
+```vue
+<template>
+  <div>
+    <ul ref="ul">
+      <li v-for="(item,index) in list" :key="index">{{item}}</li>
+    </ul>
+    <button @click="addItem">添加</button>
+  </div>
+</template>
+
+<script>
+export default {
+  data () {
+    return {
+      list: [1, 2, 3]
+    }
+  },
+  methods: {
+    addItem () {
+      this.list.push(Date.now())
+      this.list.push(Date.now())
+      this.list.push(Date.now())
+
+      // 异步渲染，$nextTick 等待 DOM 渲染完再执行回调
+      // 页面渲染时会将 data 的修改整合，多次修改 data 修改只会渲染一次
+      this.$nextTick(() => {
+        const ulElem = this.$refs.ul
+        // 如果不在 $nextTick 中获取节点数量，将获得渲染前的数量
+        console.log(ulElem.childNodes.length)
+      })
+    }
+  }
+}
+</script>
+```
 
