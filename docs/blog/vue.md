@@ -492,3 +492,49 @@ export default {
 </script>
 ```
 
+## Vue 原理相关
+
+### Object.defineProperty
+Vue 中监听 `data` 的核心 api 是 `Object.defineProperty`，它的缺点：
+- 深度监听，需要递归到底，一次性计算量大
+- 无法监听新增属性/删除属性（需要 `Vue.set` 和 `Vue.delete`
+
+Vue 中监听 `data` 的原理：
+```js
+const data = {
+    name:'wj',
+    obj:{
+        a:1,
+        b:2
+    }
+}
+
+function observe (data){
+    if(typeof data !== 'object' || data == null){
+        return data
+    }
+    // 遍历监听
+    for(let key in data){
+        let value = data[key] 
+        observe(value) // 深度监听
+        Object.defineProperty(data, key, {
+            get (){
+                return value
+            },
+            set (newVal){
+                if(newVal !== value){
+                    value = newVal
+                    observe(newVal) // 深度监听
+                    updateView()
+                }
+            }
+        })
+    }  
+}
+
+function updateView (){
+    console.log('视图更新')
+}
+
+observe(data)
+```
