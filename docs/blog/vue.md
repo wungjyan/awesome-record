@@ -498,6 +498,7 @@ export default {
 Vue 中监听 `data` 的核心 api 是 `Object.defineProperty`，它的缺点：
 - 深度监听，需要递归到底，一次性计算量大
 - 无法监听新增属性/删除属性（需要 `Vue.set` 和 `Vue.delete`
+- 无法监听数组的变化，需要特殊处理
 
 Vue 中监听 `data` 的原理：
 ```js
@@ -538,3 +539,131 @@ function updateView (){
 
 observe(data)
 ```
+
+`Object.defineProperty` 无法监听数组的变化，即数组更新时无法触发 `setter`，在 Vue 中的数组方法有被重写，原理如下：
+```js
+// 重写数组方法，使得数组更新时可以触发视图更新
+const arrayProto = Array.prototype
+const arrayMethodsObj = Object.create(arrayProto) // 这个之后被当作新的数组原型
+const arrayMethods = ['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse']
+arrayMethods.forEach(method=>{
+    arrayMethodsObj[method] = function (){
+        updateView() // 更新视图
+        arrayProto[method].call(this, ...arguments)
+    }
+})
+
+function observe (data){
+    if(typeof data !== 'object' || data == null){
+        return data
+    }
+    // 如果是数组，将原型指向重写的原型对象
+    if(Array.isArray(data)){
+        data.__proto__ = arrayMethodsObj
+    }
+    // 遍历监听
+    for(let key in data){
+        let value = data[key] 
+        observe(value) // 深度监听
+        Object.defineProperty(data, key, {
+            get (){
+                return value
+            },
+            set (newVal){
+                if(newVal !== value){
+                    value = newVal
+                    observe(newVal) // 深度监听
+                    updateView()
+                }
+            }
+        })
+    }  
+}
+
+function updateView (){
+    console.log('视图更新')
+}
+
+observe(data)
+```
+
+### vdom
+vdom 的基本原理是用 js 模拟 DOM 结构，计算出最小的变更，再去操作真实 DOM。
+
+js 模拟 DOM 的一个小例子：
+```html
+<div id="div1" class="container">
+  <p>vdom</p>
+  <ul style="font-size:14px;">
+    <li>a</li>
+    <li>b</li>
+  </ul>
+</div>
+```
+这段 html 代码使用 js 模拟可以如下：
+```js
+{
+  tag: 'div',
+  props: {
+    id: 'div1',
+    className: 'container'
+  },
+  children: [
+    {
+      tag: 'p',
+      children: 'vdom'
+    },
+    {
+      tag: 'ul',
+      props: {
+        style: 'font-size:14px;'
+      },
+      children: [
+        {
+          tag: 'li',
+          children: 'a'
+        },
+        {
+          tag: 'li',
+          children: 'b'
+        }
+      ]
+    }
+  ]
+}
+```
+
+### diff 算法
+Vue/React 这类框架的 diff 算法，将时间复杂度优化到 O(n)，它的特点是：
+1. 只比较同一级，不跨级比较
+2. tag 不相同，则直接删掉重建，不再深度比较
+3. tag 和 key，两者都相同，则认为是相同节点，不再深底比较
+
+## 渲染和更新
+初次渲染的过程：
+1. 解析模板为 render 函数（在开发环境下已完成，vue-loader）
+2. 触发响应式，监听 data 属性（Object.defineProperty 的 getter 和 setter）
+3. 执行 render 函数，生成 vnode，patch(elem, vnode)
+
+更新过程：
+1. 修改 data，触发 setter（此前在 getter 中已被监听）
+2. 重新执行 render 函数，生成 newRender
+3. patch(vnode, newVnode)
+
+## 路由原理
+hash 的特点：
+- hash 变化会触发网页跳转，即浏览器的前进、后退
+- hash 变化不会刷新页面，SPA 必备的特点
+- hash 永远不会提交到server端（前端自生自灭）
+- location.hash / onhashchange
+
+H5 history：
+- 用 url 规范的路由，但跳转时不刷新页面
+- history.pushState
+- window.onpopstate
+- 需要后端支持
+
+## 何时使用 beforeDestory
+- 解绑自定义事件 event.$off
+- 清除定时器
+- 解绑自定义的 DOM 事件，如 window scroll等
