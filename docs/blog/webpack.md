@@ -1,4 +1,4 @@
-# webpack 4
+# Webpack
 这里是 webpack4 的一些学习记录
 ## 安装与配置
 推荐在每个项目内局部安装，这样各项目可以使用不同的版本。新建项目目录，然后执行：
@@ -762,3 +762,213 @@ module.exports = env => {
 webpack --env.test=hello
 ```
 这样设置后，配置文件中获取到的 `env` 为 `{ test: 'hello' }`。如果不对变量赋值，如 `--env.test` 这样，那么 test 的值就是 `true`。
+
+## 怎么配置多页面
+配置多入口，打包多页面，以两个入口文件为例，首先配置 `entry`：
+```js
+// ...
+entry: {
+    index: path.join(__dirname,'index.js'),
+    other: path.join(__dirname,'other.js')
+}
+```
+再配置 `output`：
+```js
+// ...
+output:{
+    filename: '[name].[contentHash:8].js'
+    // ...
+}
+```
+出口文件名不能一样，所以需要 `[name]`，而 `[contentHash:8]` 会根据文件是否改变来变化。最后还要配置多 html 的输出：
+```js
+// ...
+plugins:[
+    // ...
+    new HtmlWebpackPlugin({
+        template: path.join(yourPath, 'index.html'),
+        filename: 'index.html',
+        chunks: ['index'] // 只引用 index.js
+    }),
+    new HtmlWebpackPlugin({
+        template: path.join(yourPath, 'other.html'),
+        filename: 'other.html',
+        chunks: ['other'] // 只引用 other.js
+    })
+]
+```
+## 抽离 css 文件
+在开发环境下，css 代码是输入到 html 文件头部的，使用 `style-loader`，如：
+```js
+// ...
+{
+    test: /\.css$/,
+    loader: ['style-loader', 'css-loader']
+}
+```
+在生产环境，需要单独分离css文件，使用插件 `mini-css-extract-plugin`，它的配置如下：
+```js
+const MiniCssExtractPlugin = require('mini-css-extract-plugin')
+// ...
+module.exports = {
+    // ...
+    module: {
+        rules: [
+            {
+                test: /\.css$/,
+                use: [MiniCssExtractPlugin.loader,'css-loader']
+            }
+        ]
+    },
+    plugins: [new MiniCssExtractPlugin({
+        filename:'css/main.[contentPath:8].css'
+    })]
+}
+```
+线上代码应当需要压缩，可以配合两个插件：[terser-webpack-plugin](https://github.com/webpack-contrib/terser-webpack-plugin) 和 [optimize-css-assets-webpack-plugin](https://github.com/NMFR/optimize-css-assets-webpack-plugin)，压缩配置如下：
+```js
+const TerserWebpackPlugin = require('terser-webpack-plugin') // 压缩js
+const OptimizeCssAssetsWebpackPlugin = require('optimize-css-assets-webpack-plugin') // 压缩css
+// ...
+optimization:{
+    minimizer:[new TerserWebpackPlugin({}),new OptimizeCssAssetsWebpackPlugin({})]
+}
+```
+这里之所以加上 js 的压缩配置，是因为在不设置 `optimization.minimizer` 时，生产环境的 js 会默认压缩，但是主动配置压缩时，默认的压缩会被终止，所以也需要主动加上 js 的压缩。
+
+## 抽离第三方代码和公共代码
+本节可以参考 [代码分割（上）](##代码分割（上）)，这里补充一个配置：
+```js
+{
+    // ...
+    optimization:{
+        // ...
+        splitChunks:{
+            chunks:'all',
+            cacheGroups:{
+                // 第三方模块
+                vendor:{
+                    name:'vendor', // chunk 名称
+                    priority:1, // 优先级，权限更高，优先抽离
+                    test:/node_modules/,
+                    minSize:0, // 小于这个大小限定的不抽离，直接引入
+                    minChunks:1 // 最少被引用几次才抽离
+                },
+                // 公共模块
+                common:{
+                    name:'common',
+                    priority:0,
+                    minSize:0,
+                    minChunks:1
+                }
+            }
+        }
+    }
+}
+```
+
+## module、chunk 和 bundle的区别
+- module：各个源码文件，webpack 中一切皆模块
+- chunk：多模块合并成的，如 `entry`、`import()` 和 `splitChunk` 
+- bundle：最终的输出文件
+
+## webpack 优化构建速度
+### 优化 babel-loader
+```js
+{
+    test: /\.js$/,
+    use: ['babel-loader?cacheDirectory'], // 开启缓存
+    include: path.resolve(__dirname,'src'), // 明确范围
+    // 排除范围，include 和 exclude 两者选一个即可
+    // exclude: path.resolve(__dirname, 'node_modules')
+}
+```
+
+### happypack 多进程打包
+js 是单线程，开启多进程打包，提高构建速度（特别是多核CPU）。
+
+安装插件：
+```bash
+npm install happypack -D
+```
+`happypack`的配置可以在开发环境，也可以在生产环境。
+
+配置loader，这里以打包 `.js` 文件为例：
+```js
+// ...
+{
+    test: /\.js$/,
+    exclude:/node_modules/,
+    use:['happypack/loader?id=babel'] // 这里使用固定的 happypack 用法
+}
+```
+
+还要配置插件：
+```js
+// conts HappyPack = require('happypack')
+
+new HappyPack({
+    id: 'babel',
+    // loaders:['babel-loader'] // 基本配置
+    // 也可以配置 options，如下
+    loaders:[
+        {
+            loader:'babel-loader',
+            options:{
+                presets:[
+                    ['@babel/preset-env',{useBuiltIns:'usage'}
+                ]
+            }
+        }
+    ]
+})
+```
+
+### ParallelUglifyPlugin 多进程压缩 JS
+- webpack 内置 Uglify 工具压缩 JS，但不支持多进程
+- JS 单线程，使用这个工具开启多进程压缩
+- 和 happypack 同理
+
+安装：
+```bash
+npm install webpack-parallel-uglify-plugin -D
+```
+插件使用：
+```js
+{
+    // const ParallelUglifyPlugin = require('webpack-parallel-uglify-plugin')
+    // ...
+    plugins:[
+        // 并行压缩输出的 JS 代码
+        new ParallelUglifyPlugin({
+            // 传递给 UglifyJS 的参数
+            // 还是使用 UglifyJS 压缩，只不过帮助开启了多进程
+            UglifyJS: {
+                output: {
+                    beautify: false, // 是否最紧凑的输出
+                    comments: false // 删除所有的注释
+                },
+                compress:{
+                    // 删除所有的 `console` 语句，可以兼容 ie 浏览器
+                    drop_console: true,
+                    // 内嵌定义了但是只用到一次的变量
+                    collapse_vars: true,
+                    // 提取出出现多次但是没有定义成变量去引用的静态值
+                    reduce_vars: true
+                }
+            }
+        })
+    ]
+}
+```
+注意这个插件应该使用在生产环境的打包。
+
+#### 关于开启多进程
+- 项目较大，打包较慢，开启多进程能提高速度
+- 项目较小，打包很快，开启多进程会降低速度（进程开销）
+- 按需使用
+
+
+
+
+
