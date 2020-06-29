@@ -837,7 +837,7 @@ optimization:{
 这里之所以加上 js 的压缩配置，是因为在不设置 `optimization.minimizer` 时，生产环境的 js 会默认压缩，但是主动配置压缩时，默认的压缩会被终止，所以也需要主动加上 js 的压缩。
 
 ## 抽离第三方代码和公共代码
-本节可以参考 [代码分割（上）](##代码分割（上）)，这里补充一个配置：
+本节可以参考 [代码分割（上）](#代码分割（上）)，这里补充一个配置：
 ```js
 {
     // ...
@@ -968,7 +968,99 @@ npm install webpack-parallel-uglify-plugin -D
 - 项目较小，打包很快，开启多进程会降低速度（进程开销）
 - 按需使用
 
+## 自动刷新与热更新
+一般开发环境下，使用 `webpack-dev-server` 时会自动开启自动刷新，无需再配置。而热更新需要再配置，热更新与自动刷新的区别：
+- 自动刷新，整个网页全部刷新，速度较慢，状态会丢失
+- 热更新，新代码生效，网页不刷新，状态不丢失
 
+webpack 开启热更新可以参考 [热替换](#热替换) ，本节补充一个知识点，即有时我们需要自己手动去对一些模块开启热更新，这里有一个例子：
+
+工具库模块：
+```js
+// util.js
+export function sum(a,b){
+    return a + b
+}
+```
+入口文件：
+```js
+// index.js
+
+import {sum} from './util'
+console.log(sum(10,50)) // 修改这里时，无法热更新
+
+
+// 手动监听需要热更新的模块，这里接收 util.js 文件，当修改 util.js 文件时，会触发热更新回调
+if(module.hot){
+    module.hot.accept(['./util.js'],() => {
+        console.log(sum(10,40))
+    })
+}
+```
+
+## DllPlugin 动态链接库插件
+在开发环境中，每次构建都需要打包引入的第三方模块，如果不打包这些模块，那么构建速度将大大提升，这正是 DllPlugin 要做到的事。
+
+webpack 内置了 DllPlugin 支持，使用 DllPlugin 插件打包出 dll 文件，使用 DllReferencePlugin 插件使用 dll 文件。
+
+这里以打包 `lodash` 这个第三方模块为例。首先编写一个 webpack 配置文件用以打包 `lodash` 模块：
+```js
+// webpack.dll.js
+
+const webpack = require('webpack')
+const path = require('path')
+module.exports = {
+    mode:'development',
+    entry:{
+        lodash:['lodash']
+    },
+    output:{
+        // 输出的动态链接库的文件名称，[name] 代表当前动态链接库的名称
+        // 在这里 name 指的就是 lodash
+        filename:'[name].dll.js',
+        // 输出的文件放到这个目录下
+        path:path.join(__dirname,'public'),
+        // 存放动态链接库的全局变量名称。这里就是 _dll_lodash
+        library:'_dll_[name]'
+    },
+    plugins:[
+        new webpack.DllPlugin({
+            // 该字段的值需要和 output.library 中保持一致
+            // 该字段的值也就是输出的 manifest.json 文件中的 name 字段的值
+            name:'_dll_[name]',
+            // 描述动态链接库的 manifest.json 文件输出时的文件名称
+            path:path.join(__dirname,'public/[name].manifest.json')
+        })
+    ]
+}
+```
+然后可以在 `package.json` 的 `scripts` 中写入一个命令：
+```json
+scripts:{
+    "dll": "webpack --config webpack.dll.js"
+}
+```
+此时执行 `npm run dll` 即可打包出 `lodash` 的 dll 文件。
+
+接下来还有两个重要步骤，一个是要在模板文件中手动引入刚打包出来的文件：
+```html
+<body>
+    <script src="../public//lodash.dll.js"></script>
+</body>
+```
+然后在开发环境的配置文件中使用 `DllReferencePlugin` 插件：
+```js
+// webpack.dev.js
+
+// ...
+plugins:[
+    // ...
+    new webpack.DllReferencePlugin({
+        manifest:require('./public/lodash.manifest.json')
+    })
+]
+```
+重新执行 `npm run dev` 启动服务时，就不会再打包 `lodash` 模块了。
 
 
 
