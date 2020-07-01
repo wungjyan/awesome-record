@@ -356,6 +356,10 @@ npm install --save @babel/runtime-corejs2
 ## Tree Shaking
 tree shaking 是一个术语，通常用于描述移除 JavaScript 上下文中的未引用代码(dead-code)，它依赖于 ES2015 模块系统中的静态结构特性，例如 `import` 和 `export`，在 CommonJS 规范中不适用。
 
+**为什么在 CommonJS 规范中不适用？**
+
+ES6 Module 是静态引入，编译时引入；而CommonJS 是动态引入，执行时引入。打包时，代码还没执行，所以只能静态分析的 ES6 Module 可以实现 Tree-Shaking。
+
 举个例子，写一个 `math.js` 文件，它包含两个方法函数：
 
 `src/main.js`
@@ -1062,5 +1066,38 @@ plugins:[
 ```
 重新执行 `npm run dev` 启动服务时，就不会再打包 `lodash` 模块了。
 
+## webpack 性能优化-产出代码
+webpack 对产出代码的优化可以达到下面目的：
+- 体积更小
+- 合理分包，不重复加载
+- 速度更快，内存使用更少
+
+一些优化方法包括：
+- 小图片使用 base64 编码
+- bundle 加 hash，缓存优化
+- 懒加载（import）
+- 提取公共代码
+- IngnorePlugin
+- 使用 CDN 加速
+- 使用 production 模式，生产环境下会自动开启一些优化（Tree Shaking，Scope Histing）
+
+### IgnorePlugin
+webpack 中的 IgnorePlugin 插件，可以在打包第三方包时忽略一些文件内容，比如打包 `moment` 这个插件时，可以忽略其他语言包内容：
+```js
+import moment from 'moment'
+// 引入中文
+import 'moment/locale/zh-cn'
+// 设置中文
+moment.locale('zh-cn');
+let momentStr = moment().subtract(10, 'days').calendar();
+```
+webpack 配置：
+```js
+// ...
+plugins:[
+    new webpack.IgnorePlugin(/^\.\/locale$/, /moment$/) // 忽略打包语言包
+]
+```
+这样操作后，可以极大的减小打包体积。
 
 
