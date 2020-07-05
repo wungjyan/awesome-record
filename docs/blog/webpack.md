@@ -1100,4 +1100,84 @@ plugins:[
 ```
 这样操作后，可以极大的减小打包体积。
 
+## babel-polyfill
+什么是 `polyfill`？它是 `core-js` 和 `regenerator` 的集合。
+
+Babel 7.4 之后，`babel-polyfill` 被弃用，推荐直接使用 `core-js` 和 `regenerator`。
+
+如果只配置了 `@babel/preset-env`，那么只会解析 es6 的语法，对于一些新特性是没办法解析的，比如 `promise`，所以此时是需要 `polyfill` 的，可以直接引入使用，如：
+```js
+import '@babel/polyfill'
+
+// or
+// require('@babel/polyfill')
+```
+`polyfill` 文件比较大，如果只解析一部分新特性而全部引入的话显而不太合适，所以需要配置按需引入，用到什么引入什么。配置比较简单，在 `.babelrc` 文件中配置如下：
+```js
+{
+    "presets":[
+        [
+            "@babel/preset-env",
+            // 这个配置可以按需引入polyfill，它使用的是 corejs 包
+            {
+                "usebuiltIns": "usage",
+                "corejs": 3
+            }
+        ]
+    ]
+}
+```
+
+## babel-runtime
+使用 `polyfill` 有一个问题，就是会污染全局变量，因为它会在全局使用 `window.Promise` 这样类似的写法来重写的方法，更好的方式应该是重命名，这时就需要使用 `babel-runtime`。
+
+需要安装两个插件：
+```js
+npm install @babel/plugin-transform-runtime -D
+
+npm install @babel/runtime -S
+```
+
+然后在 `.babelrc` 文件中配置 `plugins`：
+```js
+{
+    "plugins": [
+        [
+            "@babel/plugin-transform-runtime",
+            {
+                "absoluteRuntime": false,
+                "corejs": 3,
+                "helpers": true,
+                "regenerator": true,
+                "useESModules": true
+            }
+        ]
+    ]
+}
+```
+
+## 前端为何要进行打包和构建
+代码层面来说：
+- 体积更小（Tree Shaking、压缩、合并），加载更快
+- 编译高级语言或语法（TS、ES6、模块化、scss）
+- 兼容性和错误检查（Polyfill、postcss、eslint）
+
+流程方面来说：
+- 统一、高效的开发环境
+- 统一的构建流程和产出标准
+- 集成公司的构建规范（提测、上线等）
+
+## loader 和 plugin 的区别
+- loader 模块转换器，如 scss -> css
+- plugin 扩展插件，如 `HtmlWebpackPlugin`
+
+Loader 本质是一个函数，会对接收到的内容进行转换，返回转换后的结果。webpack 只认识 js，Loader 相当于翻译官，对其他类型的资源进行转译。
+
+Plugin 可以扩展 webpack 的功能，在 webpack 运行的生命周期中会广播出许多事件，Plugin 可以监听这些事件，在合适的时机通过 webpack 提供的 api 改变输出结果。
+
+
+
+
+
+
 
